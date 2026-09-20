@@ -48,6 +48,19 @@ Runs on local tooling (SAM CLI emulating API Gateway and Lambda) rather than a l
 
 ## Architecture
 
+```mermaid
+flowchart TD
+  A["Browser frontend"] --> B
+  subgraph B["AWS SAM CLI: local API Gateway + Lambda"]
+    C["/extract"]
+    D["/generate-filing"]
+    E["Case handlers"]
+  end
+  C --> G["Groq API"]
+  D --> G
+  E --> H[("DynamoDB via LocalStack")]
+```
+
 - **API layer:** AWS SAM CLI, emulating API Gateway and Lambda locally (Node.js)
 - **PDF text extraction:** `unpdf` (serverless-safe, no native or canvas dependencies)
 - **AI extraction and narrative drafting:** `openai/gpt-oss-20b` via Groq's API (override with the `GROQ_MODEL` environment variable). A plain extract, structure, draft pipeline; no agent framework is used.
