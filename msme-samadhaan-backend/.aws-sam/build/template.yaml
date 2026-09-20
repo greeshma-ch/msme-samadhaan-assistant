@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: msme-samadhaan-backend
 Transform:
 - AWS::Serverless-2016-10-31
+Parameters:
+  GroqApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
 Resources:
   getAllItemsFunction:
     Type: AWS::Serverless::Function
@@ -87,6 +92,52 @@ Resources:
       CodeUri: putItemFunction
     Metadata:
       SamResourceId: putItemFunction
+  extractInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/extract-invoice.extractInvoiceHandler
+      Runtime: nodejs22.x
+      Architectures:
+      - x86_64
+      MemorySize: 256
+      Timeout: 30
+      Description: Extracts structured invoice fields from an uploaded PDF using Groq.
+      Environment:
+        Variables:
+          GROQ_API_KEY:
+            Ref: GroqApiKey
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /extract
+            Method: POST
+      CodeUri: extractInvoiceFunction
+    Metadata:
+      SamResourceId: extractInvoiceFunction
+  GenerateFilingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/generate-filing.generateFilingHandler
+      Runtime: nodejs22.x
+      Architectures:
+      - x86_64
+      MemorySize: 256
+      Timeout: 30
+      Description: Extracts structured invoice fields from an uploaded PDF using Groq.
+      Environment:
+        Variables:
+          GROQ_API_KEY:
+            Ref: GroqApiKey
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /generate-filing
+            Method: POST
+      CodeUri: GenerateFilingFunction
+    Metadata:
+      SamResourceId: GenerateFilingFunction
   SampleTable:
     Type: AWS::Serverless::SimpleTable
     Properties:
@@ -105,3 +156,8 @@ Globals:
   Function:
     LoggingConfig:
       LogFormat: JSON
+  Api:
+    Cors:
+      AllowMethods: '''GET,POST,OPTIONS'''
+      AllowHeaders: '''Content-Type'''
+      AllowOrigin: '''*'''

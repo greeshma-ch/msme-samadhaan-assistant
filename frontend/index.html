@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MSME Samadhaan Assistant</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; max-width: 820px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; background: #fafafa; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .subtitle { color: #666; margin-bottom: 24px; font-size: 0.95rem; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab { padding: 8px 16px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+  .tab.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; margin-bottom: 20px; }
+  label { display: block; font-size: 0.85rem; font-weight: 600; margin-top: 14px; margin-bottom: 4px; color: #333; }
+  input[type=text], input[type=number], input[type=date] { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; }
+  input[type=file] { margin-top: 6px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .checkbox-row input { width: auto; }
+  button { background: #1a1a1a; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; margin-top: 18px; margin-right: 8px; }
+  button:hover { background: #333; }
+  button:disabled { background: #999; cursor: not-allowed; }
+  button.secondary { background: #fff; color: #1a1a1a; border: 1px solid #ccc; }
+  .status { font-size: 0.85rem; color: #666; margin-top: 10px; }
+  .status.error { color: #c0392b; }
+  .status.ok { color: #27ae60; }
+  pre.filing { white-space: pre-wrap; font-family: inherit; font-size: 0.88rem; line-height: 1.5; background: #f7f7f7; padding: 16px; border-radius: 8px; border: 1px solid #e5e5e5; max-height: 420px; overflow-y: auto; }
+  .claim-summary { display: flex; gap: 24px; margin: 16px 0; flex-wrap: wrap; }
+  .claim-box { background: #f7f7f7; border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 150px; }
+  .claim-box .label { font-size: 0.75rem; color: #777; text-transform: uppercase; margin-top: 0; }
+  .claim-box .value { font-size: 1.15rem; font-weight: 700; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+  .case-item { padding: 10px 0; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+  .case-item:last-child { border-bottom: none; }
+  .badge { display: inline-block; background: #eef; color: #334; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: 8px; }
+</style>
+</head>
+<body>
+
+<h1>MSME Samadhaan Assistant</h1>
+<div class="subtitle">Turn a delayed-payment invoice into an MSEFC-ready filing — AI drafts, you review, the Council decides.</div>
+
+<div class="card">
+  <div class="tabs">
+    <div class="tab active" id="tabUpload" onclick="switchTab('upload')">Upload invoice</div>
+    <div class="tab" id="tabManual" onclick="switchTab('manual')">Enter manually</div>
+  </div>
+
+  <div id="uploadSection">
+    <label>Invoice PDF</label>
+    <input type="file" id="pdfFile" accept="application/pdf">
+    <button onclick="extractInvoice()" id="extractBtn">Extract details</button>
+    <div class="status" id="extractStatus"></div>
+  </div>
+
+  <form id="caseForm">
+    <label>Supplier / MSME name</label>
+    <input type="text" id="supplierName">
+
+    <label>Buyer name</label>
+    <input type="text" id="buyerName">
+
+    <label>Invoice number</label>
+    <input type="text" id="invoiceNumber">
+
+    <label>Invoice amount (₹)</label>
+    <input type="number" id="invoiceAmount">
+
+    <label>Invoice date</label>
+    <input type="date" id="invoiceDate">
+
+    <label>Date of acceptance</label>
+    <input type="date" id="acceptanceDate">
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="paymentReceived">
+      <label style="margin:0;">Payment already received</label>
+    </div>
+
+    <label>Payment date (if received)</label>
+    <input type="date" id="paymentDate">
+
+    <button type="button" onclick="generateFiling()" id="generateBtn">Generate filing</button>
+  </form>
+  <div class="status" id="generateStatus"></div>
+</div>
+
+<div class="card" id="resultCard" style="display:none;">
+  <h2 style="font-size:1.1rem;">Filing draft</h2>
+  <div class="claim-summary" id="claimSummary"></div>
+  <table id="breakdownTable"></table>
+  <h3 style="font-size:1rem; margin-top:20px;">Draft text</h3>
+  <pre class="filing" id="filingText"></pre>
+  <button onclick="saveCase()" id="saveBtn">Save case</button>
+  <button class="secondary" onclick="window.print()">Print / Save as PDF</button>
+  <div class="status" id="saveStatus"></div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:1.1rem;">Saved cases</h2>
+  <button class="secondary" onclick="loadCases()">Refresh</button>
+  <div id="casesList" style="margin-top:12px;"></div>
+</div>
+
+<script>
+const API_BASE = 'http://localhost:3000';
+let lastFilingResult = null;
+
+function switchTab(tab) {
+  document.getElementById('tabUpload').classList.toggle('active', tab === 'upload');
+  document.getElementById('tabManual').classList.toggle('active', tab === 'manual');
+  document.getElementById('uploadSection').style.display = tab === 'upload' ? 'block' : 'none';
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function extractInvoice() {
+  const fileInput = document.getElementById('pdfFile');
+  const statusEl = document.getElementById('extractStatus');
+  if (!fileInput.files[0]) { statusEl.textContent = 'Choose a PDF first.'; statusEl.className = 'status error'; return; }
+
+  statusEl.textContent = 'Extracting...'; statusEl.className = 'status';
+  document.getElementById('extractBtn').disabled = true;
+
+  try {
+    const base64 = await fileToBase64(fileInput.files[0]);
+    const res = await fetch(`${API_BASE}/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: base64 })
+    });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+
+    document.getElementById('supplierName').value = data.supplierName || '';
+    document.getElementById('buyerName').value = data.buyerName || '';
+    document.getElementById('invoiceNumber').value = data.invoiceNumber || '';
+    document.getElementById('invoiceAmount').value = data.invoiceAmount || '';
+    document.getElementById('invoiceDate').value = data.invoiceDate || '';
+    document.getElementById('acceptanceDate').value = data.acceptanceDate || '';
+    document.getElementById('paymentReceived').checked = !!data.paymentReceived;
+    document.getElementById('paymentDate').value = data.paymentDate || '';
+
+    statusEl.textContent = 'Extracted — review the fields below before generating the filing.';
+    statusEl.className = 'status ok';
+  } catch (err) {
+    statusEl.textContent = 'Extraction failed: ' + err.message;
+    statusEl.className = 'status error';
+  } finally {
+    document.getElementById('extractBtn').disabled = false;
+  }
+}
+
+function getFormData() {
+  return {
+    supplierName: document.getElementById('supplierName').value,
+    buyerName: document.getElementById('buyerName').value,
+    invoiceNumber: document.getElementById('invoiceNumber').value,
+    invoiceAmount: Number(document.getElementById('invoiceAmount').value),
+    invoiceDate: document.getElementById('invoiceDate').value,
+    acceptanceDate: document.getElementById('acceptanceDate').value,
+    paymentReceived: document.getElementById('paymentReceived').checked,
+    paymentDate: document.getElementById('paymentDate').value || null
+  };
+}
+
+async function generateFiling() {
+  const statusEl = document.getElementById('generateStatus');
+  statusEl.textContent = 'Generating filing draft...'; statusEl.className = 'status';
+  document.getElementById('generateBtn').disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/generate-filing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getFormData())
+    });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+    lastFilingResult = data;
+
+    document.getElementById('filingText').textContent = data.filingText || '';
+
+    const claim = data.claim || {};
+    document.getElementById('claimSummary').innerHTML = `
+      <div class="claim-box"><div class="label">Principal</div><div class="value">₹${(claim.principalOutstanding || 0).toLocaleString('en-IN')}</div></div>
+      <div class="claim-box"><div class="label">Interest (Sec 16)</div><div class="value">₹${(claim.interest || 0).toLocaleString('en-IN')}</div></div>
+      <div class="claim-box"><div class="label">Total claimed</div><div class="value">₹${(claim.totalClaimed || 0).toLocaleString('en-IN')}</div></div>
+    `;
+
+    const breakdown = (data.interest && data.interest.breakdown) || [];
+    let tableHtml = '<tr><th>Period</th><th>Days</th><th>Rate</th><th>Interest</th></tr>';
+    breakdown.forEach(row => {
+      tableHtml += `<tr><td>${row.from} to ${row.to}</td><td>${row.days}</td><td>${row.interestRatePct}%</td><td>₹${row.interest.toLocaleString('en-IN')}</td></tr>`;
+    });
+    document.getElementById('breakdownTable').innerHTML = tableHtml;
+
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
+    statusEl.textContent = '';
+  } catch (err) {
+    statusEl.textContent = 'Failed to generate filing: ' + err.message;
+    statusEl.className = 'status error';
+  } finally {
+    document.getElementById('generateBtn').disabled = false;
+  }
+}
+
+async function saveCase() {
+  const statusEl = document.getElementById('saveStatus');
+  if (!lastFilingResult) { statusEl.textContent = 'Generate a filing first.'; statusEl.className = 'status error'; return; }
+
+  statusEl.textContent = 'Saving...'; statusEl.className = 'status';
+  document.getElementById('saveBtn').disabled = true;
+
+  const payload = {
+    id: String(Date.now()),
+    ...getFormData(),
+    status: 'Draft',
+    totalClaimed: lastFilingResult.claim ? lastFilingResult.claim.totalClaimed : null,
+    filingText: lastFilingResult.filingText
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    statusEl.textContent = 'Case saved.'; statusEl.className = 'status ok';
+    loadCases();
+  } catch (err) {
+    statusEl.textContent = 'Save failed: ' + err.message;
+    statusEl.className = 'status error';
+  } finally {
+    document.getElementById('saveBtn').disabled = false;
+  }
+}
+
+async function loadCases() {
+  const listEl = document.getElementById('casesList');
+  listEl.textContent = 'Loading...';
+  try {
+    const res = await fetch(`${API_BASE}/`);
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+    const items = data.items || data.Items || data || [];
+    if (!items.length) { listEl.textContent = 'No cases saved yet.'; return; }
+    listEl.innerHTML = items.map(c => `
+      <div class="case-item">
+        <strong>${c.supplierName || c.name || 'Unnamed case'}</strong>
+        ${c.buyerName ? ' vs ' + c.buyerName : ''}
+        <span class="badge">${c.status || 'Draft'}</span>
+        ${c.totalClaimed ? `<div>Claimed: ₹${Number(c.totalClaimed).toLocaleString('en-IN')}</div>` : ''}
+      </div>
+    `).join('');
+  } catch (err) {
+    listEl.textContent = 'Failed to load cases: ' + err.message;
+  }
+}
+
+loadCases();
+</script>
+</body>
+</html>

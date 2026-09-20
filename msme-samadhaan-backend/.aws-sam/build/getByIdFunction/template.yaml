@@ -4,6 +4,12 @@ Description: >-
 Transform:
 - AWS::Serverless-2016-10-31
 
+Parameters:
+  GroqApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 Resources:
@@ -94,6 +100,45 @@ Resources:
           Properties:
             Path: /
             Method: POST
+  extractInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/extract-invoice.extractInvoiceHandler
+      Runtime: nodejs22.x
+      Architectures:
+      - x86_64
+      MemorySize: 256
+      Timeout: 30
+      Description: Extracts structured invoice fields from an uploaded PDF using Groq.
+      Environment:
+        Variables:
+          GROQ_API_KEY: !Ref GroqApiKey
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /extract
+            Method: POST
+  GenerateFilingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/generate-filing.generateFilingHandler
+      Runtime: nodejs22.x
+      Architectures:
+      - x86_64
+      MemorySize: 256
+      Timeout: 30
+      Description: Extracts structured invoice fields from an uploaded PDF using Groq.
+      Environment:
+        Variables:
+          GROQ_API_KEY: !Ref GroqApiKey
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /generate-filing
+            Method: POST
+
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
 
@@ -117,3 +162,8 @@ Globals:
   Function:
     LoggingConfig:
       LogFormat: JSON
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowHeaders: "'Content-Type'"
+      AllowOrigin: "'*'"
