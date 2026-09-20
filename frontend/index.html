@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MSME Samadhaan Assistant</title>
 <style>
   * { box-sizing: border-box; }
@@ -21,6 +22,7 @@
   button:hover { background: #333; }
   button:disabled { background: #999; cursor: not-allowed; }
   button.secondary { background: #fff; color: #1a1a1a; border: 1px solid #ccc; }
+  button:focus-visible, .tab:focus-visible, input:focus-visible { outline: 2px solid #1a1a1a; outline-offset: 2px; }
   .status { font-size: 0.85rem; color: #666; margin-top: 10px; }
   .status.error { color: #c0392b; }
   .status.ok { color: #27ae60; }
@@ -29,11 +31,22 @@
   .claim-box { background: #f7f7f7; border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 150px; }
   .claim-box .label { font-size: 0.75rem; color: #777; text-transform: uppercase; margin-top: 0; }
   .claim-box .value { font-size: 1.15rem; font-weight: 700; margin-top: 2px; }
+  .notice { font-size: 0.85rem; border-radius: 8px; padding: 10px 14px; margin: 12px 0; line-height: 1.45; }
+  .notice.warn { background: #fff8e1; border: 1px solid #f0e2a8; color: #5c4a00; }
+  .notice.info { background: #f4f6fb; border: 1px solid #dfe4f0; color: #444; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
   th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
   .case-item { padding: 10px 0; border-bottom: 1px solid #eee; font-size: 0.9rem; }
   .case-item:last-child { border-bottom: none; }
   .badge { display: inline-block; background: #eef; color: #334; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: 8px; }
+
+  /* Print: show only the filing, and never clip the draft text */
+  @media print {
+    .no-print { display: none !important; }
+    body { margin: 0; max-width: none; background: #fff; }
+    .card { border: none; padding: 0; }
+    pre.filing { max-height: none !important; overflow: visible !important; background: #fff; border: none; padding: 0; }
+  }
 </style>
 </head>
 <body>
@@ -41,7 +54,7 @@
 <h1>MSME Samadhaan Assistant</h1>
 <div class="subtitle">Turn a delayed-payment invoice into an MSEFC-ready filing — AI drafts, you review, the Council decides.</div>
 
-<div class="card">
+<div class="card no-print">
   <div class="tabs">
     <div class="tab active" id="tabUpload" onclick="switchTab('upload')">Upload invoice</div>
     <div class="tab" id="tabManual" onclick="switchTab('manual')">Enter manually</div>
@@ -88,16 +101,20 @@
 
 <div class="card" id="resultCard" style="display:none;">
   <h2 style="font-size:1.1rem;">Filing draft</h2>
+  <div id="warnings"></div>
   <div class="claim-summary" id="claimSummary"></div>
   <table id="breakdownTable"></table>
+  <div id="disclaimer"></div>
   <h3 style="font-size:1rem; margin-top:20px;">Draft text</h3>
   <pre class="filing" id="filingText"></pre>
-  <button onclick="saveCase()" id="saveBtn">Save case</button>
-  <button class="secondary" onclick="window.print()">Print / Save as PDF</button>
-  <div class="status" id="saveStatus"></div>
+  <div class="no-print">
+    <button onclick="saveCase()" id="saveBtn">Save case</button>
+    <button class="secondary" onclick="window.print()">Print / Save as PDF</button>
+    <div class="status" id="saveStatus"></div>
+  </div>
 </div>
 
-<div class="card">
+<div class="card no-print">
   <h2 style="font-size:1.1rem;">Saved cases</h2>
   <button class="secondary" onclick="loadCases()">Refresh</button>
   <div id="casesList" style="margin-top:12px;"></div>
@@ -107,12 +124,42 @@
 const API_BASE = 'http://localhost:3000';
 let lastFilingResult = null;
 
+// ---------- helpers ----------
+const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+));
+
+const fmtDate = s => {
+  if (!s) return '';
+  const d = new Date(s + 'T00:00:00Z');
+  return isNaN(d) ? esc(s) : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+};
+
+// Show the server's own message (for example "Payment is not overdue yet") instead of a bare status code
+async function readError(res) {
+  try {
+    const d = await res.json();
+    return d.message || d.detail || `Server returned ${res.status}`;
+  } catch {
+    return `Server returned ${res.status}`;
+  }
+}
+
+function setStatus(el, text, cls) {
+  el.textContent = text;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+// ---------- tabs ----------
 function switchTab(tab) {
   document.getElementById('tabUpload').classList.toggle('active', tab === 'upload');
   document.getElementById('tabManual').classList.toggle('active', tab === 'manual');
   document.getElementById('uploadSection').style.display = tab === 'upload' ? 'block' : 'none';
 }
 
+// ---------- extraction ----------
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -125,9 +172,9 @@ function fileToBase64(file) {
 async function extractInvoice() {
   const fileInput = document.getElementById('pdfFile');
   const statusEl = document.getElementById('extractStatus');
-  if (!fileInput.files[0]) { statusEl.textContent = 'Choose a PDF first.'; statusEl.className = 'status error'; return; }
+  if (!fileInput.files[0]) { setStatus(statusEl, 'Choose a PDF first.', 'error'); return; }
 
-  statusEl.textContent = 'Extracting...'; statusEl.className = 'status';
+  setStatus(statusEl, 'Extracting...');
   document.getElementById('extractBtn').disabled = true;
 
   try {
@@ -137,7 +184,7 @@ async function extractInvoice() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file: base64 })
     });
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    if (!res.ok) throw new Error(await readError(res));
     const data = await res.json();
 
     document.getElementById('supplierName').value = data.supplierName || '';
@@ -149,21 +196,20 @@ async function extractInvoice() {
     document.getElementById('paymentReceived').checked = !!data.paymentReceived;
     document.getElementById('paymentDate').value = data.paymentDate || '';
 
-    statusEl.textContent = 'Extracted — review the fields below before generating the filing.';
-    statusEl.className = 'status ok';
+    setStatus(statusEl, 'Extracted — review the fields below before generating the filing.', 'ok');
   } catch (err) {
-    statusEl.textContent = 'Extraction failed: ' + err.message;
-    statusEl.className = 'status error';
+    setStatus(statusEl, 'Extraction failed: ' + err.message, 'error');
   } finally {
     document.getElementById('extractBtn').disabled = false;
   }
 }
 
+// ---------- filing ----------
 function getFormData() {
   return {
-    supplierName: document.getElementById('supplierName').value,
-    buyerName: document.getElementById('buyerName').value,
-    invoiceNumber: document.getElementById('invoiceNumber').value,
+    supplierName: document.getElementById('supplierName').value.trim(),
+    buyerName: document.getElementById('buyerName').value.trim(),
+    invoiceNumber: document.getElementById('invoiceNumber').value.trim(),
     invoiceAmount: Number(document.getElementById('invoiceAmount').value),
     invoiceDate: document.getElementById('invoiceDate').value,
     acceptanceDate: document.getElementById('acceptanceDate').value,
@@ -174,16 +220,27 @@ function getFormData() {
 
 async function generateFiling() {
   const statusEl = document.getElementById('generateStatus');
-  statusEl.textContent = 'Generating filing draft...'; statusEl.className = 'status';
+  const form = getFormData();
+
+  if (!form.supplierName || !(form.invoiceAmount > 0) || !form.acceptanceDate) {
+    setStatus(statusEl, 'Enter the supplier name, invoice amount and date of acceptance.', 'error');
+    return;
+  }
+  if (form.paymentReceived && !form.paymentDate) {
+    setStatus(statusEl, 'Enter the payment date, or untick "Payment already received".', 'error');
+    return;
+  }
+
+  setStatus(statusEl, 'Generating filing draft...');
   document.getElementById('generateBtn').disabled = true;
 
   try {
     const res = await fetch(`${API_BASE}/generate-filing`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getFormData())
+      body: JSON.stringify(form)
     });
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    if (!res.ok) throw new Error(await readError(res));
     const data = await res.json();
     lastFilingResult = data;
 
@@ -191,34 +248,41 @@ async function generateFiling() {
 
     const claim = data.claim || {};
     document.getElementById('claimSummary').innerHTML = `
-      <div class="claim-box"><div class="label">Principal</div><div class="value">₹${(claim.principalOutstanding || 0).toLocaleString('en-IN')}</div></div>
-      <div class="claim-box"><div class="label">Interest (Sec 16)</div><div class="value">₹${(claim.interest || 0).toLocaleString('en-IN')}</div></div>
-      <div class="claim-box"><div class="label">Total claimed</div><div class="value">₹${(claim.totalClaimed || 0).toLocaleString('en-IN')}</div></div>
+      <div class="claim-box"><div class="label">Principal</div><div class="value">${inr(claim.principalOutstanding)}</div></div>
+      <div class="claim-box"><div class="label">Interest (Sec 16)</div><div class="value">${inr(claim.interest)}</div></div>
+      <div class="claim-box"><div class="label">Total claimed</div><div class="value">${inr(claim.totalClaimed)}</div></div>
     `;
 
     const breakdown = (data.interest && data.interest.breakdown) || [];
     let tableHtml = '<tr><th>Period</th><th>Days</th><th>Rate</th><th>Interest</th></tr>';
     breakdown.forEach(row => {
-      tableHtml += `<tr><td>${row.from} to ${row.to}</td><td>${row.days}</td><td>${row.interestRatePct}%</td><td>₹${row.interest.toLocaleString('en-IN')}</td></tr>`;
+      tableHtml += `<tr><td>${fmtDate(row.from)} to ${fmtDate(row.to)}</td><td>${esc(row.days)}</td><td>${esc(row.interestRatePct)}%</td><td>${inr(row.interest)}</td></tr>`;
     });
     document.getElementById('breakdownTable').innerHTML = tableHtml;
 
+    // Warnings (for example an unverified rate for an older invoice) and the disclaimer
+    const warnings = data.warnings || [];
+    document.getElementById('warnings').innerHTML = warnings
+      .map(w => `<div class="notice warn">${esc(w)}</div>`).join('');
+    document.getElementById('disclaimer').innerHTML = data.disclaimer
+      ? `<div class="notice info">${esc(data.disclaimer)}</div>` : '';
+
     document.getElementById('resultCard').style.display = 'block';
     document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
-    statusEl.textContent = '';
+    setStatus(statusEl, '');
   } catch (err) {
-    statusEl.textContent = 'Failed to generate filing: ' + err.message;
-    statusEl.className = 'status error';
+    setStatus(statusEl, 'Failed to generate filing: ' + err.message, 'error');
   } finally {
     document.getElementById('generateBtn').disabled = false;
   }
 }
 
+// ---------- saved cases ----------
 async function saveCase() {
   const statusEl = document.getElementById('saveStatus');
-  if (!lastFilingResult) { statusEl.textContent = 'Generate a filing first.'; statusEl.className = 'status error'; return; }
+  if (!lastFilingResult) { setStatus(statusEl, 'Generate a filing first.', 'error'); return; }
 
-  statusEl.textContent = 'Saving...'; statusEl.className = 'status';
+  setStatus(statusEl, 'Saving...');
   document.getElementById('saveBtn').disabled = true;
 
   const payload = {
@@ -235,12 +299,11 @@ async function saveCase() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
-    statusEl.textContent = 'Case saved.'; statusEl.className = 'status ok';
+    if (!res.ok) throw new Error(await readError(res));
+    setStatus(statusEl, 'Case saved.', 'ok');
     loadCases();
   } catch (err) {
-    statusEl.textContent = 'Save failed: ' + err.message;
-    statusEl.className = 'status error';
+    setStatus(statusEl, 'Save failed: ' + err.message, 'error');
   } finally {
     document.getElementById('saveBtn').disabled = false;
   }
@@ -251,16 +314,16 @@ async function loadCases() {
   listEl.textContent = 'Loading...';
   try {
     const res = await fetch(`${API_BASE}/`);
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    if (!res.ok) throw new Error(await readError(res));
     const data = await res.json();
     const items = data.items || data.Items || data || [];
     if (!items.length) { listEl.textContent = 'No cases saved yet.'; return; }
     listEl.innerHTML = items.map(c => `
       <div class="case-item">
-        <strong>${c.supplierName || c.name || 'Unnamed case'}</strong>
-        ${c.buyerName ? ' vs ' + c.buyerName : ''}
-        <span class="badge">${c.status || 'Draft'}</span>
-        ${c.totalClaimed ? `<div>Claimed: ₹${Number(c.totalClaimed).toLocaleString('en-IN')}</div>` : ''}
+        <strong>${esc(c.supplierName || c.name || 'Unnamed case')}</strong>
+        ${c.buyerName ? ' vs ' + esc(c.buyerName) : ''}
+        <span class="badge">${esc(c.status || 'Draft')}</span>
+        ${c.totalClaimed ? `<div>Claimed: ${inr(c.totalClaimed)}</div>` : ''}
       </div>
     `).join('');
   } catch (err) {
