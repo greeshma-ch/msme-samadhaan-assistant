@@ -18,7 +18,7 @@ Built for **First Commit** (WeMakeDevs x AWS, Bharat Builds Tour), Build It trac
 |---|---|---|
 | 15 | The buyer must pay by the date agreed in writing or, with no agreement, by the appointed day. A written agreement can never exceed **45 days** from acceptance or deemed acceptance. | Due date |
 | 16 | The buyer owes **compound interest with monthly rests at three times the Bank Rate notified by the RBI**. | Interest calculation |
-| 17 | The buyer is liable to pay the amount due together with the Section 16 interest. | Not yet cited in the generated draft |
+| 17 | The buyer is liable to pay the amount due together with the Section 16 interest. | Basis of the claim |
 | 18 | Any party may refer the dispute to the MSEFC, which conciliates and, if that fails, takes up arbitration. | The reference the tool drafts |
 
 **2026 amendment:** the MSMED (Amendment) Act, 2026 passed Parliament in August 2026 and was published in the Gazette on 13 August 2026, but its provisions take effect on dates the Central Government notifies separately ([summary](https://masllp.com/msmed-amendment-act-2026-new-msme-delayed-payment-rules-explained-simply/)). It adds an online dispute resolution mechanism, fixed timelines for mediation and arbitration, and recovery of awards as arrears of land revenue ([PIB](https://www.pib.gov.in/FactsheetDetails.aspx?Id=150826&reg=48&lang=2)). The drafts follow Sections 15 to 18 as they currently stand. Check the commencement notification before relying on any new provision.
