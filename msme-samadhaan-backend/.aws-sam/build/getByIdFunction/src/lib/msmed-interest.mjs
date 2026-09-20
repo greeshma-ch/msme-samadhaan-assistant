@@ -80,7 +80,7 @@ export function calculateInterest({
     paymentTermDays: termDays,
     dueDate: fmt(due),
     calculatedTill: fmt(end),
-    sections: ['Section 15', 'Section 16', 'Section 18'],
+    sections: ['Section 15', 'Section 16', 'Section 17', 'Section 18'],
   };
 
   if (end <= due) {

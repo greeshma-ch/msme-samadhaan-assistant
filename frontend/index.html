@@ -73,6 +73,12 @@
 
     <label>Buyer name</label>
     <input type="text" id="buyerName">
+    
+    <label>Buyer address (optional)</label>
+    <input type="text" id="buyerAddress">
+
+    <label>Supplier Udyam registration number (optional)</label>
+    <input type="text" id="udyamNumber">
 
     <label>Invoice number</label>
     <input type="text" id="invoiceNumber">
@@ -209,6 +215,8 @@ function getFormData() {
   return {
     supplierName: document.getElementById('supplierName').value.trim(),
     buyerName: document.getElementById('buyerName').value.trim(),
+    buyerAddress: document.getElementById('buyerAddress').value.trim(),
+    udyamNumber: document.getElementById('udyamNumber').value.trim(),
     invoiceNumber: document.getElementById('invoiceNumber').value.trim(),
     invoiceAmount: Number(document.getElementById('invoiceAmount').value),
     invoiceDate: document.getElementById('invoiceDate').value,
