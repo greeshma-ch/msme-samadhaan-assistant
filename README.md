@@ -31,7 +31,7 @@ The tool aims to raise the number of eligible MSMEs that actually file. It does 
 
 1. **Upload an invoice PDF** (or use the **Enter manually** tab). An AI extraction step pulls out the supplier, buyer, invoice number, amount and key dates.
 2. **Review and correct** the extracted fields, and optionally add the buyer's address and the supplier's Udyam registration number. Anything left blank appears in the draft as a clearly marked placeholder to complete before filing. The person stays in control before anything is generated.
-3. **Generate the filing.** The backend calculates the exact Section 16 interest (3x Bank Rate, monthly rests, counted from the day after the 45-day period ends) and drafts a reference to the Council that cites Sections 15, 16 and 18, with a month-by-month interest table. The claim summary shows principal, Section 16 interest and the total claimed, and the draft can be printed or saved as a PDF.
+3. **Generate the filing.** The backend calculates the exact Section 16 interest (3x Bank Rate, monthly rests, counted from the day after the 45-day period ends) and drafts a reference to the Council that cites Sections 15, 16, 17 and 18, with a month-by-month interest table. The claim summary shows principal, Section 16 interest and the total claimed, and the draft can be printed or saved as a PDF.
 4. **Save the case.** Saved cases are listed in the app, with a status (for example, Draft), so the owner can come back to them.
 
 The Council still makes the ruling. This tool only removes the paperwork barrier.
