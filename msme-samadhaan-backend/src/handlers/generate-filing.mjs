@@ -48,9 +48,10 @@ async function llmNarrative(facts) {
           {
             role: 'system',
             content:
-              'You draft the "Statement of Facts" for an MSME payment-delay reference under the MSMED Act, 2006. ' +
-              'Write 2 short formal paragraphs. Use ONLY the facts given in the JSON, copying amounts and dates exactly as written. ' +
-              'Do not add any facts, figures, legal citations or case law. Do not calculate anything. Plain text only.',
+            'You draft the "Statement of Facts" for an MSME payment-delay reference under the MSMED Act, 2006. ' +
+            'Write 2 short formal paragraphs. Use ONLY the facts given in the JSON, copying amounts and dates exactly as written. ' +
+            'Do not add any facts, figures, legal citations or case law. Do not calculate anything. Plain text only. ' +
+            'Do not mention any agreement, contract, purchase order or terms "specified in" any document. Describe the 45-day period only as the statutory period under Section 15 of the MSMED Act, 2006.',
           },
           { role: 'user', content: JSON.stringify(facts) },
         ],
@@ -60,6 +61,7 @@ async function llmNarrative(facts) {
     const text = data.choices?.[0]?.message?.content?.trim();
     const amountDigits = facts.invoiceAmount.replace('₹', '').replace(/\.00$/, '');
     if (!res.ok || !text || !text.includes(amountDigits)) return null;
+    if (/agreement|contract|purchase order|specified in/i.test(text)) return null;
     return text;
   } catch {
     return null;
@@ -154,7 +156,8 @@ export const generateFilingHandler = async (event) => {
       `calculated till ${longDate(calc.calculatedTill)}:`,
     table,
     '',
-    '4. AMOUNT CLAIMED',
+    '4. AMOUNT CLAIMED (SECTION 17)',
+    'The Respondent is liable to pay the amount due together with interest under Section 16, as provided by Section 17.',
     `Principal outstanding: ${inr(principalOutstanding)}`,
     `Interest under Section 16: ${inr(calc.interest)}`,
     `Total claimed: ${inr(totalClaimed)}`,
